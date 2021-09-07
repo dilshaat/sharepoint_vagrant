@@ -43,8 +43,9 @@ Start-Process "$MountedDriveLetter\PrerequisiteInstaller.exe" `
 			-RedirectStandardOutput $standardOutputFile `
 			-RedirectStandardError $errorOutputFile
 
+Start-Process "$MountedDriveLetter\setup.exe" -ArgumentList "/config C:\tmp\config_single.xml"
+
+Dismount-DiskImage -ImagePath $SP_img
+
 Write-Host "SharePoint Prerequisites are installed!, Please checks logs!"
-
-$ProductKey = "NQGJR-63HC8-XCRQH-MYVCH-3J3QR"
-
 
