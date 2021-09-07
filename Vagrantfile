@@ -24,10 +24,10 @@ Import-Module ADDSDeployment
 Install-ADDSForest `
 -CreateDnsDelegation:$false `
 -DatabasePath "C:\\Windows\\NTDS" `
--DomainMode "WinThreshold" `
+-DomainMode "default" `
 -DomainName "da.int" `
 -DomainNetbiosName "DA" `
--ForestMode "Windows2012R2" `
+-ForestMode "default" `
 -InstallDns:$true `
 -LogPath "C:\\Windows\\NTDS" `
 -NoRebootOnCompletion:$false `
@@ -35,7 +35,11 @@ Install-ADDSForest `
 -Force:$true `
 -SafeModeAdministratorPassword $pw
 
-# Install-WindowsFeature -IncludeAllSubFeature RSAT
+$usersPassword = ConvertTo-SecureString "pass@word1" -AsPlainText -Force
+New-ADUser -Name "SPSQL" -PasswordNeverExpires $True -GivenName "SPSQL" -Surname "SPSQL" -AccountPassword $usersPassword -DisplayName "SPSQL"
+New-ADUser -Name "SPInstall" -PasswordNeverExpires $True -GivenName "SPInstall" -Surname "SPInstall" -AccountPassword $usersPassword -DisplayName "SPIntall"
+New-ADUser -Name "SPFarm" -PasswordNeverExpires $True -GivenName "SPFarm" -Surname "SPFarm" -AccountPassword $usersPassword -DisplayName "SPFarm"
+
 EOF
 
 Vagrant.configure("2") do |config|
@@ -53,6 +57,23 @@ Vagrant.configure("2") do |config|
       v.gui = false
     end
   end
+
+  config.vm.define 'sql' do |sql|
+    sql.vm.box = "peru/windows-server-2019-standard-x64-eval"
+    sql.vm.hostname = "#{SQL_Hostname}"
+    sql.vm.network "private_network", ip: "192.168.85.101"
+    sql.vm.provision "shell", privileged: "true", inline: $script_fw_off
+    # sql.vm.provision "shell", privileged: "true", inline: $script_join_domain
+    sql.vm.provision "file", source: "./SQLAuto", destination: "~/Downloads/SQLAuto"
+    sql.vm.provision "shell", privileged: "true", inline: "Set-Location ~/Downloads/SQLAuto; .\\Install-SqlServer -SqlVersion 2017"
+    sql.vm.network "forwarded_port", guest: 1433, host: 1437
+    sql.vm.provider "virtualbox" do |v|
+      v.name = "SQLServer"
+      v.cpus = 4
+      v.memory = 2048
+      v.gui = false
+    end
+  end
   
   config.vm.define "app" do |app|
     app.vm.box = "peru/windows-server-2019-standard-x64-eval"
@@ -61,6 +82,7 @@ Vagrant.configure("2") do |config|
     # app.vm.provision "file", source: "./files/officeserver.img", destination: "~/Downloads/officeserver.img"
     app.vm.provision "shell", privileged: "true", inline: $script_fw_off
     app.vm.provision "shell", privileged: "true", inline: $script_join_domain
+    app.vm.provision "file", source: "./files/config_single.xml", destination: "C:/tmp/config_single.xml"
     app.vm.provision "shell", privileged: "true", path: "./scripts/download_SP2016.ps1"
     app.vm.provision "shell", privileged: "true", path: "./scripts/install_sharepoint2016.ps1"
     app.vm.provider "virtualbox" do |v|
@@ -71,23 +93,6 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  config.vm.define 'sql' do |sql|
-    sql.vm.box = "peru/windows-server-2019-standard-x64-eval"
-    sql.vm.hostname = "#{SQL_Hostname}"
-    sql.vm.network "private_network", ip: "192.168.85.101"
-    sql.vm.provision "shell", privileged: "true", inline: $script_fw_off
-    sql.vm.provision "shell", privileged: "true", inline: $script_join_domain
-    sql.vm.provision "file", source: "./scripts/Configuration.ini", destination: "~/Downloads/Configuration.ini"
-    sql.vm.provision "shell", privileged: "true", path: "./scripts/download_sql_image.ps1"
-    sql.vm.provision "shell", privileged: "true", path: "./scripts/install_sql_server.ps1"
-    sql.vm.network "forwarded_port", guest: 1433, host: 1437
-    sql.vm.provider "virtualbox" do |v|
-      v.name = "SQLServer"
-      v.cpus = 4
-      v.memory = 2048
-      v.gui = false
-    end
-  end
   
   config.vm.define "ca" do |ca|
     ca.vm.box = "peru/windows-server-2019-standard-x64-eval"
